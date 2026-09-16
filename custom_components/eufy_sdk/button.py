@@ -1,13 +1,13 @@
-"""Button platform — device-level actions the bridge exposes (HomeBase reboot)."""
+"""Button platform — device-level actions the bridge exposes (reboot, PTZ)."""
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
 
-from .entity import EufySdkDeviceEntity
+from .entity import EufySdkDeviceEntity, has_capability
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -16,13 +16,38 @@ if TYPE_CHECKING:
     from .coordinator import EufySdkDataUpdateCoordinator
     from .data import EufySdkConfigEntry
 
+# Every PTZ control is keyed by the bridge action it sends, and carries how it presents:
+#   {action: {"label": …, "icon": …, "category": under Configuration; default primary}}
+#
+# The d-pad, in the order a d-pad reads. Each verb is a no-arg method on the SDK's `ptz`
+# surface, so the action name IS the verb.
+_PTZ_STEPS: dict[str, dict[str, Any]] = {
+    "up": {"label": "Tilt up", "icon": "mdi:arrow-up"},
+    "down": {"label": "Tilt down", "icon": "mdi:arrow-down"},
+    "left": {"label": "Pan left", "icon": "mdi:arrow-left"},
+    "right": {"label": "Pan right", "icon": "mdi:arrow-right"},
+}
+
+# The stored-position actions, whose dotted names the bridge routes into the preset
+# sub-API. Both act on the slot the PTZ preset select holds, so neither carries one.
+_PTZ_PRESETS: dict[str, dict[str, Any]] = {
+    # Recalling a stored view is everyday use, so it stays a primary control.
+    "preset.goto": {"label": "Go to preset", "icon": "mdi:target"},
+    # Saving one is a setup step, so it sits under Configuration instead.
+    "preset.save": {
+        "label": "Save preset",
+        "icon": "mdi:content-save-move",
+        "category": EntityCategory.CONFIG,
+    },
+}
+
 
 async def async_setup_entry(
     hass: HomeAssistant,  # noqa: ARG001
     entry: EufySdkConfigEntry,
     async_add_entities: AddEntitiesCallback,
 ) -> None:
-    """Create a Reboot button (HomeBases) and a Refresh-Last-Event button (cameras)."""
+    """Create Reboot, Refresh-Last-Event and the PTZ controls (pan-tilt cameras)."""
     coordinator = entry.runtime_data.coordinator
     entities: list[ButtonEntity] = [
         EufySdkRebootButton(coordinator, sn)
@@ -37,6 +62,20 @@ async def async_setup_entry(
         for sn, dev in coordinator.data.items()
         if dev.get("stream")
     )
+    # The d-pad and the preset actions, gated on the `ptz` capability the bridge
+    # reports: a fixed camera has no `ptz` surface, so the bridge would refuse every
+    # verb and the buttons would sit there as dead controls.
+    for sn, dev in coordinator.data.items():
+        if not has_capability(dev, "ptz"):
+            continue
+        entities.extend(
+            EufySdkPtzButton(coordinator, sn, action, meta)
+            for action, meta in _PTZ_STEPS.items()
+        )
+        entities.extend(
+            EufySdkPtzPresetButton(coordinator, sn, action, meta)
+            for action, meta in _PTZ_PRESETS.items()
+        )
     async_add_entities(entities)
 
 
@@ -74,3 +113,54 @@ class EufyRefreshEventButton(EufySdkDeviceEntity, ButtonEntity):
         """Ask the bridge to re-pull the newest event cover (nudges the Image)."""
         client = self.coordinator.config_entry.runtime_data.client
         await client.refresh_event_image(self._sn)
+
+
+class EufySdkPtzButton(EufySdkDeviceEntity, ButtonEntity):
+    """
+    One pan-tilt step, in the direction this button carries.
+
+    Fire-and-forget: P2P carries no acknowledgement, so a press that returns without
+    raising means the frame left for the camera, not that the camera finished moving.
+    Where it ended up arrives separately as a `ptzNotify` event, which the Image entity
+    already watches.
+    """
+
+    def __init__(
+        self,
+        coordinator: EufySdkDataUpdateCoordinator,
+        sn: str,
+        action: str,
+        meta: dict[str, Any],
+    ) -> None:
+        """Bind to a camera serial and the bridge action this button sends."""
+        super().__init__(coordinator, sn)
+        self._action = action
+        self._attr_unique_id = f"{sn}_ptz_{action.replace('.', '_')}"
+        self._attr_name = meta["label"]
+        self._attr_icon = meta["icon"]
+        self._attr_entity_category = meta.get("category")
+
+    @property
+    def _args(self) -> tuple:
+        """Positional arguments for the action — a movement step takes none."""
+        return ()
+
+    async def async_press(self) -> None:
+        """Send this button's PTZ action to the bridge."""
+        client = self.coordinator.config_entry.runtime_data.client
+        await client.action(self._sn, self._action, *self._args)
+
+
+class EufySdkPtzPresetButton(EufySdkPtzButton):
+    """
+    Go to, or save, the stored position the PTZ preset select points at.
+
+    A slot the camera has nothing stored in is a silent no-op on the wire: the camera
+    ignores the frame and no error comes back, so a go-to against an unsaved slot looks
+    like a button that did nothing. Save the position into the slot first.
+    """
+
+    @property
+    def _args(self) -> tuple[int]:
+        """The slot chosen for this camera — slot 1 until the select says otherwise."""
+        return (self.coordinator.config_entry.runtime_data.ptz_slots.get(self._sn, 1),)
