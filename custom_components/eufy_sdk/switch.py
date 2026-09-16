@@ -83,6 +83,10 @@ class EufySdkSwitch(EufySdkPropertyEntity, SwitchEntity):
 class EufyBitmaskSwitch(EufySdkPropertyEntity, SwitchEntity):
     """One bit of a bitfield property as a switch (writes back the whole mask)."""
 
+    # Each bit is its own control ("Detect human"), not the parent property, so the
+    # generic property label must not be applied over the per-bit name.
+    _named_by_translation = True
+
     def __init__(
         self,
         coordinator: EufySdkDataUpdateCoordinator,
