@@ -20,8 +20,12 @@ DEFAULT_POLL_INTERVAL_MIN = 10
 # Schema version this integration targets (the bridge sends its own in `hello`/`ready`).
 SUPPORTED_SCHEMA = 1
 
-# Stored PTZ preset slots offered per pan-tilt camera. Eight is what the SDK sees on
-# the models it has observed (an unused slot reports `enable: 0`). Models differ, but
-# referencing an empty slot is a silent no-op on the wire, so offering eight costs
-# nothing where there are fewer — the camera ignores what it has no position for.
-PTZ_PRESET_SLOTS = 8
+# How many preset slots to offer before the camera has ever been asked. A last
+# resort, not the normal path: the slots are read from the camera (see presets.py)
+# and the select remembers the last answer across restarts, so this count is only
+# ever seen on the very first start with the camera asleep. The SDK documents this
+# many; some models report more, and the first successful read corrects it.
+PRESET_SLOTS = 8
+
+# Where the preset select keeps the slots it last read, so they survive a restart.
+ATTR_SLOTS = "slots"

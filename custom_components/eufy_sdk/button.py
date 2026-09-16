@@ -6,7 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.button import ButtonDeviceClass, ButtonEntity
 from homeassistant.const import EntityCategory
+from homeassistant.exceptions import HomeAssistantError
 
+from . import presets
 from .entity import EufySdkDeviceEntity, has_capability
 
 if TYPE_CHECKING:
@@ -26,19 +28,6 @@ _PTZ_STEPS: dict[str, dict[str, Any]] = {
     "down": {"label": "Tilt down", "icon": "mdi:arrow-down"},
     "left": {"label": "Pan left", "icon": "mdi:arrow-left"},
     "right": {"label": "Pan right", "icon": "mdi:arrow-right"},
-}
-
-# The stored-position actions, whose dotted names the bridge routes into the preset
-# sub-API. Both act on the slot the PTZ preset select holds, so neither carries one.
-_PTZ_PRESETS: dict[str, dict[str, Any]] = {
-    # Recalling a stored view is everyday use, so it stays a primary control.
-    "preset.goto": {"label": "Go to preset", "icon": "mdi:target"},
-    # Saving one is a setup step, so it sits under Configuration instead.
-    "preset.save": {
-        "label": "Save preset",
-        "icon": "mdi:content-save-move",
-        "category": EntityCategory.CONFIG,
-    },
 }
 
 
@@ -72,10 +61,8 @@ async def async_setup_entry(
             EufySdkPtzButton(coordinator, sn, action, meta)
             for action, meta in _PTZ_STEPS.items()
         )
-        entities.extend(
-            EufySdkPtzPresetButton(coordinator, sn, action, meta)
-            for action, meta in _PTZ_PRESETS.items()
-        )
+        entities.append(EufySdkGotoPresetButton(coordinator, sn))
+        entities.append(EufySdkSavePresetButton(coordinator, sn))
     async_add_entities(entities)
 
 
@@ -151,16 +138,77 @@ class EufySdkPtzButton(EufySdkDeviceEntity, ButtonEntity):
         await client.action(self._sn, self._action, *self._args)
 
 
-class EufySdkPtzPresetButton(EufySdkPtzButton):
-    """
-    Go to, or save, the stored position the PTZ preset select points at.
+class _EufySdkPresetButton(EufySdkPtzButton):
+    """Base for the two preset actions: both act on the slot the select holds."""
 
-    A slot the camera has nothing stored in is a silent no-op on the wire: the camera
-    ignores the frame and no error comes back, so a go-to against an unsaved slot looks
-    like a button that did nothing. Save the position into the slot first.
-    """
+    _action: str
+    _slug: str
+
+    def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
+        """Bind to a pan-tilt camera serial."""
+        super().__init__(
+            coordinator,
+            sn,
+            self._action,
+            {"label": self._attr_name, "icon": self._attr_icon},
+        )
+        # The base derives the id from the action; these two are named for what they
+        # DO, so a later change of verb (goto → preview, as already happened) does not
+        # orphan the entity the user has in their dashboards.
+        self._attr_unique_id = f"{sn}_{self._slug}"
+
+    @property
+    def _slot(self) -> int:
+        """Return the slot the select points at, or the camera's first one."""
+        entry = self.coordinator.config_entry
+        slots = presets.slots_for(entry, self._sn)
+        default = slots[0].index if slots else 0
+        return entry.runtime_data.selected_preset.get(self._sn, default)
 
     @property
     def _args(self) -> tuple[int]:
-        """The slot chosen for this camera — slot 1 until the select says otherwise."""
-        return (self.coordinator.config_entry.runtime_data.ptz_slots.get(self._sn, 1),)
+        """Pass the selected slot as the action's only argument."""
+        return (self._slot,)
+
+
+class EufySdkGotoPresetButton(_EufySdkPresetButton):
+    """
+    Swing the camera onto the stored position the select points at.
+
+    An empty slot is a silent no-op on the wire — the camera drops the frame and
+    reports nothing — so a go-to against one looks like a dead button. Where the
+    camera has told us the slot is empty, refuse it here instead and say why.
+    """
+
+    _action = presets.ACTION_GOTO
+    _slug = "preset_goto"
+    _attr_icon = "mdi:target"
+    _attr_name = "Go to preset"
+
+    async def async_press(self) -> None:
+        """Move to the selected slot, unless the camera says it holds nothing."""
+        entry = self.coordinator.config_entry
+        slot = self._slot
+        known = {s.index: s for s in presets.slots_for(entry, self._sn)}
+        if (chosen := known.get(slot)) is not None and not chosen.occupied:
+            msg = (
+                f"preset {slot} has no stored position — aim the camera and "
+                f"press Save preset first"
+            )
+            raise HomeAssistantError(msg)
+        await super().async_press()
+
+
+class EufySdkSavePresetButton(_EufySdkPresetButton):
+    """Store the camera's current position into the slot the select points at."""
+
+    _action = presets.ACTION_SAVE
+    _slug = "preset_save"
+    _attr_entity_category = EntityCategory.CONFIG
+    _attr_icon = "mdi:content-save-move"
+    _attr_name = "Save preset"
+
+    async def async_press(self) -> None:
+        """Save, then re-read the slots: the one just written is no longer empty."""
+        await super().async_press()
+        await presets.async_refresh_slots(self.coordinator.config_entry, self._sn)
