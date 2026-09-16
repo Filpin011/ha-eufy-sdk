@@ -265,7 +265,7 @@ class EufySdkInfoSensor(EufySdkDeviceEntity, SensorEntity):
         """Name it '<device> Info'."""
         super().__init__(coordinator, sn)
         self._attr_unique_id = f"{sn}_info"
-        self._attr_name = "Info"
+        self._attr_translation_key = "info"
 
     @property
     def native_value(self) -> str | None:
@@ -330,7 +330,7 @@ class EufySdkLastPersonSensor(EufySdkDeviceEntity, SensorEntity):
     not just "a person".
     """
 
-    _attr_name = "Last person"
+    _attr_translation_key = "last_person"
     _attr_icon = "mdi:account-question"
 
     def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
@@ -383,7 +383,7 @@ class EufyStreamUrlSensor(EufySdkDeviceEntity, SensorEntity):
         super().__init__(coordinator, sn)
         self._host = host
         self._attr_unique_id = f"{sn}_stream_url"
-        self._attr_name = "Stream URL"
+        self._attr_translation_key = "stream_url"
         self._active: bool | None = None  # last streamState event; None → use poll
 
     async def async_added_to_hass(self) -> None:
@@ -431,7 +431,7 @@ class EufyLightEffectSensor(EufySdkDeviceEntity, SensorEntity):
         super().__init__(coordinator, sn)
         self._name_by_id = name_by_id
         self._attr_unique_id = f"{sn}_light_effect"
-        self._attr_name = "Light Effect"
+        self._attr_translation_key = "light_effect"
 
     @property
     def native_value(self) -> str | None:

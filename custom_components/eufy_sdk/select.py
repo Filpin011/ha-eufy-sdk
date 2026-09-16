@@ -95,7 +95,7 @@ class EufySdkPresetSelect(EufySdkDeviceEntity, SelectEntity, RestoreEntity):
 
     _attr_entity_category = EntityCategory.CONFIG
     _attr_icon = "mdi:map-marker-multiple"
-    _attr_name = "Preset"
+    _attr_translation_key = "preset"
 
     def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
         """Start from the fallback slots; the real ones arrive on the first read."""

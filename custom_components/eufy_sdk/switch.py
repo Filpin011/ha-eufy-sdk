@@ -44,9 +44,9 @@ async def async_setup_entry(
                         coordinator,
                         sn,
                         spec,
-                        {"label": label, "bit": bit, "base": bf["base"]},
+                        {"key": key, "bit": bit, "base": bf["base"]},
                     )
-                    for label, bit in bf["bits"].items()
+                    for key, bit in bf["bits"].items()
                 )
     async_add_entities(entities)
 
@@ -90,12 +90,12 @@ class EufyBitmaskSwitch(EufySdkPropertyEntity, SwitchEntity):
         spec: dict[str, Any],
         bitdef: dict[str, Any],
     ) -> None:
-        """Bind to a single bit of the parent bitfield property ({label, bit, base})."""
+        """Bind to a single bit of the parent bitfield property ({key, bit, base})."""
         super().__init__(coordinator, sn, spec)
         self._bit: int = bitdef["bit"]
         self._base: int = bitdef["base"]
         self._attr_unique_id = f"{sn}_{self._prop}_{self._bit}"
-        self._attr_name = bitdef["label"]
+        self._attr_translation_key = bitdef["key"]
         self._attr_entity_category = EntityCategory.CONFIG
 
     def _mask(self) -> int:

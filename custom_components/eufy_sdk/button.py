@@ -20,15 +20,16 @@ if TYPE_CHECKING:
     from .data import EufySdkConfigEntry
 
 # Every PTZ control is keyed by the bridge action it sends, and carries how it presents:
-#   {action: {"label": …, "icon": …, "category": under Configuration; default primary}}
+#   {action: {"key": translation key, "icon": …, "category": under Configuration}}
 #
 # The d-pad, in the order a d-pad reads. Each verb is a no-arg method on the SDK's `ptz`
-# surface, so the action name IS the verb.
+# surface, so the action name IS the verb. The displayed name comes from the translation
+# key rather than living here, so it follows the user's language.
 _PTZ_STEPS: dict[str, dict[str, Any]] = {
-    "up": {"label": "Tilt up", "icon": "mdi:arrow-up"},
-    "down": {"label": "Tilt down", "icon": "mdi:arrow-down"},
-    "left": {"label": "Pan left", "icon": "mdi:arrow-left"},
-    "right": {"label": "Pan right", "icon": "mdi:arrow-right"},
+    "up": {"key": "tilt_up", "icon": "mdi:arrow-up"},
+    "down": {"key": "tilt_down", "icon": "mdi:arrow-down"},
+    "left": {"key": "pan_left", "icon": "mdi:arrow-left"},
+    "right": {"key": "pan_right", "icon": "mdi:arrow-right"},
 }
 
 
@@ -71,7 +72,7 @@ class EufySdkRebootButton(EufySdkDeviceEntity, ButtonEntity):
 
     _attr_device_class = ButtonDeviceClass.RESTART
     _attr_entity_category = EntityCategory.CONFIG
-    _attr_name = "Reboot"
+    _attr_translation_key = "reboot"
 
     def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
         """Bind to a HomeBase serial."""
@@ -89,7 +90,7 @@ class EufyRefreshEventButton(EufySdkDeviceEntity, ButtonEntity):
 
     _attr_entity_category = EntityCategory.DIAGNOSTIC
     _attr_icon = "mdi:image-refresh"
-    _attr_name = "Refresh Last Event"
+    _attr_translation_key = "refresh_last_event"
 
     def __init__(self, coordinator: EufySdkDataUpdateCoordinator, sn: str) -> None:
         """Bind to a camera/doorbell serial."""
@@ -123,7 +124,7 @@ class EufySdkPtzButton(EufySdkDeviceEntity, ButtonEntity):
         super().__init__(coordinator, sn)
         self._action = action
         self._attr_unique_id = f"{sn}_ptz_{action.replace('.', '_')}"
-        self._attr_name = meta["label"]
+        self._attr_translation_key = meta["key"]
         self._attr_icon = meta["icon"]
         self._attr_entity_category = meta.get("category")
 
@@ -150,7 +151,7 @@ class _EufySdkPresetButton(EufySdkPtzButton):
             coordinator,
             sn,
             self._action,
-            {"label": self._attr_name, "icon": self._attr_icon},
+            {"key": self._attr_translation_key, "icon": self._attr_icon},
         )
         # The base derives the id from the action; these two are named for what they
         # DO, so a later change of verb (goto → preview, as already happened) does not
@@ -183,7 +184,7 @@ class EufySdkGotoPresetButton(_EufySdkPresetButton):
     _action = presets.ACTION_GOTO
     _slug = "preset_goto"
     _attr_icon = "mdi:target"
-    _attr_name = "Go to preset"
+    _attr_translation_key = "preset_goto"
 
     async def async_press(self) -> None:
         """Move to the selected slot, unless the camera says it holds nothing."""

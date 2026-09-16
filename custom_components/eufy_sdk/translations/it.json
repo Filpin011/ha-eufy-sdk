@@ -1,4 +1,83 @@
 {
+  "entity": {
+    "binary_sensor": {
+      "streaming": {
+        "name": "Streaming"
+      },
+      "connectivity": {
+        "name": "Connettività"
+      }
+    },
+    "button": {
+      "reboot": {
+        "name": "Riavvia"
+      },
+      "refresh_last_event": {
+        "name": "Aggiorna ultimo evento"
+      },
+      "tilt_up": {
+        "name": "Inclina in alto"
+      },
+      "tilt_down": {
+        "name": "Inclina in basso"
+      },
+      "pan_left": {
+        "name": "Ruota a sinistra"
+      },
+      "pan_right": {
+        "name": "Ruota a destra"
+      },
+      "preset_goto": {
+        "name": "Vai al preset"
+      }
+    },
+    "event": {
+      "doorbell": {
+        "name": "Campanello"
+      },
+      "detection": {
+        "name": "Rilevamento"
+      }
+    },
+    "image": {
+      "last_event": {
+        "name": "Ultimo evento"
+      }
+    },
+    "select": {
+      "preset": {
+        "name": "Preset"
+      }
+    },
+    "sensor": {
+      "info": {
+        "name": "Informazioni"
+      },
+      "last_person": {
+        "name": "Ultima persona"
+      },
+      "stream_url": {
+        "name": "URL dello stream"
+      },
+      "light_effect": {
+        "name": "Effetto luce"
+      }
+    },
+    "switch": {
+      "detect_human": {
+        "name": "Rileva persone"
+      },
+      "detect_vehicle": {
+        "name": "Rileva veicoli"
+      },
+      "detect_pet": {
+        "name": "Rileva animali"
+      },
+      "face_recognition": {
+        "name": "Riconoscimento volti"
+      }
+    }
+  },
   "config": {
     "step": {
       "user": {
