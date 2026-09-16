@@ -29,3 +29,9 @@ PRESET_SLOTS = 8
 
 # Where the preset select keeps the slots it last read, so they survive a restart.
 ATTR_SLOTS = "slots"
+
+# How long to leave between re-reads of a camera's preset slots. Reading is P2P and
+# only happens while the camera is already awake for some other reason, so this is
+# not a poll — it just stops a long live view from re-asking on every refresh. Long
+# enough to be free, short enough that a preset added in the eufy app turns up.
+SLOT_REREAD_SECS = 600

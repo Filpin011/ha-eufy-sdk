@@ -29,8 +29,10 @@ if TYPE_CHECKING:
 # SDK's own docs explain why — that frame is byte-identical to the save frame, and
 # the camera reads it as "store here". `preview` (6035) is a distinct command, the
 # one the app uses to swing the camera onto a preset, and it does move it.
+# Saving is deliberately absent: presets are created in the eufy app, where you can
+# frame the shot while watching it. The SDK does expose a save verb, but it was never
+# seen to work here, and a control that quietly does nothing is worse than none.
 ACTION_GOTO = "preset.preview"
-ACTION_SAVE = "preset.save"
 
 
 @dataclass(frozen=True)

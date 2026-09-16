@@ -70,7 +70,7 @@
   },
   "exceptions": {
     "preset_empty": {
-      "message": "Il preset {slot} non ha una posizione salvata: inquadra la scena e premi prima Salva preset."
+      "message": "Il preset {slot} non ha una posizione salvata: creala prima dall’app eufy."
     }
   }
 }

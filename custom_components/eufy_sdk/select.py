@@ -2,14 +2,16 @@
 
 from __future__ import annotations
 
+import time
 from typing import TYPE_CHECKING, Any
 
 from homeassistant.components.select import SelectEntity
 from homeassistant.const import EntityCategory
+from homeassistant.core import callback
 from homeassistant.helpers.restore_state import RestoreEntity
 
 from . import presets
-from .const import ATTR_SLOTS
+from .const import ATTR_SLOTS, SLOT_REREAD_SECS
 from .entity import (
     EufySdkDeviceEntity,
     EufySdkPropertyEntity,
@@ -99,6 +101,7 @@ class EufySdkPresetSelect(EufySdkDeviceEntity, SelectEntity, RestoreEntity):
         """Start from the fallback slots; the real ones arrive on the first read."""
         super().__init__(coordinator, sn)
         self._attr_unique_id = f"{sn}_preset_slot"
+        self._last_read = 0.0
         self._apply(presets.slots_for(coordinator.config_entry, sn))
 
     @property
@@ -123,7 +126,29 @@ class EufySdkPresetSelect(EufySdkDeviceEntity, SelectEntity, RestoreEntity):
         self._publish()
         # Best-effort: the camera may be asleep, and a battery camera must not be
         # woken just to refresh a list. Whatever we already have stands until then.
+        await self._reread()
+
+    @callback
+    def _handle_coordinator_update(self) -> None:
+        """Re-read the slots whenever the camera happens to be awake already."""
+        # Presets can be created in the eufy app, and nothing tells us when. Rather
+        # than poll — the read is P2P and would wake a battery camera — piggyback on
+        # a camera that something else is already streaming, no more often than
+        # SLOT_REREAD_SECS. A camera that never streams simply keeps its last list.
+        if self.device.get("streaming") and self._read_is_due():
+            self.hass.async_create_task(self._reread())
+        super()._handle_coordinator_update()
+
+    def _read_is_due(self) -> bool:
+        """Return whether enough time has passed to ask the camera again."""
+        return time.monotonic() - self._last_read >= SLOT_REREAD_SECS
+
+    async def _reread(self) -> None:
+        """Ask the camera for its slots, keeping the old ones if it cannot answer."""
+        self._last_read = time.monotonic()
+        entry = self.coordinator.config_entry
         self._apply(await presets.async_refresh_slots(entry, self._sn))
+        self._publish()
         self.async_write_ha_state()
 
     async def async_select_option(self, option: str) -> None:

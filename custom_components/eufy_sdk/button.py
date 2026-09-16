@@ -63,7 +63,6 @@ async def async_setup_entry(
             for action, meta in _PTZ_STEPS.items()
         )
         entities.append(EufySdkGotoPresetButton(coordinator, sn))
-        entities.append(EufySdkSavePresetButton(coordinator, sn))
     async_add_entities(entities)
 
 
@@ -200,18 +199,3 @@ class EufySdkGotoPresetButton(_EufySdkPresetButton):
                 translation_placeholders={"slot": str(slot)},
             )
         await super().async_press()
-
-
-class EufySdkSavePresetButton(_EufySdkPresetButton):
-    """Store the camera's current position into the slot the select points at."""
-
-    _action = presets.ACTION_SAVE
-    _slug = "preset_save"
-    _attr_entity_category = EntityCategory.CONFIG
-    _attr_icon = "mdi:content-save-move"
-    _attr_name = "Save preset"
-
-    async def async_press(self) -> None:
-        """Save, then re-read the slots: the one just written is no longer empty."""
-        await super().async_press()
-        await presets.async_refresh_slots(self.coordinator.config_entry, self._sn)
