@@ -9,6 +9,7 @@ from homeassistant.const import EntityCategory
 from homeassistant.exceptions import HomeAssistantError
 
 from . import presets
+from .const import DOMAIN
 from .entity import EufySdkDeviceEntity, has_capability
 
 if TYPE_CHECKING:
@@ -191,11 +192,13 @@ class EufySdkGotoPresetButton(_EufySdkPresetButton):
         slot = self._slot
         known = {s.index: s for s in presets.slots_for(entry, self._sn)}
         if (chosen := known.get(slot)) is not None and not chosen.occupied:
-            msg = (
-                f"preset {slot} has no stored position — aim the camera and "
-                f"press Save preset first"
+            # Translated rather than spelled out here: this one surfaces in the UI,
+            # unlike the log lines, so it follows the user's language.
+            raise HomeAssistantError(
+                translation_domain=DOMAIN,
+                translation_key="preset_empty",
+                translation_placeholders={"slot": str(slot)},
             )
-            raise HomeAssistantError(msg)
         await super().async_press()
 
 

@@ -52,6 +52,11 @@
       }
     }
   },
+  "exceptions": {
+    "preset_empty": {
+      "message": "Preset {slot} has no stored position — aim the camera and press Save preset first."
+    }
+  },
   "device_automation": {
     "trigger_type": {
       "ringing": "Doorbell ringing",
