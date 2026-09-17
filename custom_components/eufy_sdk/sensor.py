@@ -32,6 +32,7 @@ if TYPE_CHECKING:
 
 EVENT_TYPE = f"{DOMAIN}_event"
 GO2RTC_RTSP_PORT = 8554  # go2rtc RTSP listener in the bridge image
+GO2RTC_API_PORT = 1984  # go2rtc's own API/WebRTC port, for players that want it
 
 # Anker Solix Smart Meter (AE1X0) telemetry metrics.
 #
@@ -413,7 +414,30 @@ class EufyStreamUrlSensor(EufySdkDeviceEntity, SensorEntity):
         rtsp_on = self.device.get("state", {}).get("rtspStream") is True
         if not self._streaming and not rtsp_on:
             return None
+        return self._rtsp_url
+
+    @property
+    def _rtsp_url(self) -> str:
+        """Where go2rtc publishes this camera, whether or not it is live now."""
         return f"rtsp://{self._host}:{GO2RTC_RTSP_PORT}/{self._sn}"
+
+    @property
+    def extra_state_attributes(self) -> dict[str, Any]:
+        """
+        The addresses, kept available even while the state is empty.
+
+        The state is deliberately None when nothing is streaming — it answers
+        "can I watch right now?". But a dashboard card needs the addresses to
+        build a player BEFORE anything streams, so they live here, where they
+        stay put. The ports are the bridge image's own; republish them
+        differently and a card can override what it builds.
+        """
+        return {
+            "rtsp_url": self._rtsp_url,
+            "go2rtc_url": f"http://{self._host}:{GO2RTC_API_PORT}",
+            "host": self._host,
+            "serial": self._sn,
+        }
 
 
 class EufyLightEffectSensor(EufySdkDeviceEntity, SensorEntity):
