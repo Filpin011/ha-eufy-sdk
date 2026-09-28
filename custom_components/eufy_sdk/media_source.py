@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING
 
 from aiohttp import web
 from homeassistant.components.http import HomeAssistantView
+from homeassistant.components.http.auth import async_sign_path
 from homeassistant.components.media_player import MediaClass, MediaType
 from homeassistant.components.media_source import (
     BrowseMediaSource,
@@ -40,6 +41,9 @@ RECENT_DAYS = 30
 _PARTS_DAY = 2
 _PARTS_CLIP = 3
 _VIEW_REGISTERED = f"{DOMAIN}_recording_view"
+# The <video>/<img> tags that load these URLs can't send HA's auth header, so the
+# path is signed instead. A generous window covers a slow SD-card download.
+_SIGNED_TTL = timedelta(hours=12)
 
 
 async def async_get_media_source(hass: HomeAssistant) -> MediaSource:
@@ -79,9 +83,9 @@ class EufyRecordingsSource(MediaSource):
         sn, _ymd, b64path = parts
         path = _unb64(b64path)
         # Play through HA's own proxy view so an HTTPS dashboard fetches it
-        # same-origin.
+        # same-origin, and sign it so the <video> tag can load it without a token.
         url = f"/api/{DOMAIN}/recording?sn={sn}&path={_b64(path)}"
-        return PlayMedia(url, "video/mp4")
+        return PlayMedia(async_sign_path(self.hass, url, _SIGNED_TTL), "video/mp4")
 
     async def async_browse_media(self, item: MediaSourceItem) -> BrowseMediaSource:
         """Browse: root to cameras, camera to days, day to clips."""
@@ -163,7 +167,11 @@ class EufyRecordingsSource(MediaSource):
                     can_play=True,
                     can_expand=False,
                     thumbnail=(
-                        f"/api/{DOMAIN}/recording?sn={sn}&path={_b64(thumb)}&kind=thumb"
+                        async_sign_path(
+                            self.hass,
+                            f"/api/{DOMAIN}/recording?sn={sn}&path={_b64(thumb)}&kind=thumb",
+                            _SIGNED_TTL,
+                        )
                         if thumb
                         else None
                     ),
