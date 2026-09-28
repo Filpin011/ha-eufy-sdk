@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from typing import TYPE_CHECKING, Any
+from urllib.parse import quote
 
 import aiohttp
 
@@ -44,6 +45,10 @@ class EufySdkApiClient:
         # int() the port defensively: HA's NumberSelector yields a float, which
         # would make an invalid URL like ws://host:3012.0/ws.
         self._url = f"ws://{host}:{int(port)}/ws"
+        # The bridge serves images and recordings over plain HTTP on the same
+        # port; the media-source proxy fetches from here (server-side, LAN) and
+        # re-serves them over HA's own origin.
+        self._http = f"http://{host}:{int(port)}"
         self._session = session
         self._on_event = on_event
         # Called after the receive loop reconnects following a drop (e.g. a bridge
@@ -309,3 +314,21 @@ class EufySdkApiClient:
     async def reboot(self, sn: str) -> None:
         """Reboot a HomeBase (hub-only; it drops offline for a minute or two)."""
         await self.rpc("device.reboot", sn=sn)
+
+    # ── saved SD-card recordings ────────────────────────────────────────────
+    async def list_recordings(self, sn: str, date: str) -> list[dict[str, Any]]:
+        """Return recording rows for one YYYYMMDD day (path, thumb, times, frames)."""
+        reply = await self.rpc("recording.list", sn=sn, date=date)
+        return reply.get("recordings", [])
+
+    def recording_url(self, sn: str, storage_path: str) -> str:
+        """Build the bridge URL that downloads and decrypts one recording as MP4."""
+        return f"{self._http}/recording/{sn}?path={quote(storage_path, safe='')}"
+
+    def thumb_url(self, sn: str, thumb_path: str) -> str:
+        """Build the bridge URL for a recording's snapshot thumbnail."""
+        return f"{self._http}/recording-thumb/{sn}?path={quote(thumb_path, safe='')}"
+
+    async def open_bridge_stream(self, url: str) -> aiohttp.ClientResponse:
+        """Open a streaming GET against the bridge (the caller releases it)."""
+        return await self._session.get(url)
