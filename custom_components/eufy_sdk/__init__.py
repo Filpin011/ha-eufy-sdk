@@ -26,6 +26,7 @@ from .const import (
 )
 from .coordinator import EufySdkDataUpdateCoordinator
 from .data import EufySdkData
+from .media_source import async_register_recording_view
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -130,6 +131,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
     entry.runtime_data.properties = properties
 
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
+
+    # Serve the recordings media source's HTTP proxy (once, regardless of entries).
+    async_register_recording_view(hass)
     return True
 
 
