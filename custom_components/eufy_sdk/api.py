@@ -318,7 +318,9 @@ class EufySdkApiClient:
     # ── saved SD-card recordings ────────────────────────────────────────────
     async def list_recordings(self, sn: str, date: str) -> list[dict[str, Any]]:
         """Return recording rows for one YYYYMMDD day (path, thumb, times, frames)."""
-        reply = await self.rpc("recording.list", sn=sn, date=date)
+        # A battery camera has to be woken over P2P first (~15s worst case) before
+        # the calendar query (~14s) even starts, so allow well past the 15s default.
+        reply = await self.rpc("recording.list", timeout=45, sn=sn, date=date)
         return reply.get("recordings", [])
 
     def recording_url(self, sn: str, storage_path: str) -> str:
@@ -331,4 +333,9 @@ class EufySdkApiClient:
 
     async def open_bridge_stream(self, url: str) -> aiohttp.ClientResponse:
         """Open a streaming GET against the bridge (the caller releases it)."""
-        return await self._session.get(url)
+        # The bridge wakes the camera, downloads, decrypts and muxes before it
+        # sends a byte, so the whole clip can be ~2 min away — well past the
+        # shared session's default timeout.
+        return await self._session.get(
+            url, timeout=aiohttp.ClientTimeout(total=180, sock_connect=10)
+        )
