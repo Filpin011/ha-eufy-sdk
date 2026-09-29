@@ -182,19 +182,16 @@ class EufyRecordingsCard extends HTMLElement {
     const key = `${sn}|${day}`;
     this._cache = this._cache || {};
     if (force) delete this._cache[key];
-    // Already have it → show instantly, no bridge round-trip (a battery camera is slow to wake).
+    // Already have this day (even an empty result) → show it, no bridge round-trip. This is what stops the
+    // card from hammering a sleeping camera: one attempt per day, then cached until ⟳ forces a refresh.
     if (this._cache[key]) {
       this._render(sn, day, this._cache[key]);
       return;
     }
-    // One list at a time: while a slow query runs, just remember that the view moved and reload once
-    // it returns — never pile up 40s queries behind each other.
-    if (this._loading) {
-      this._dirty = true;
-      return;
-    }
+    // One query in flight at a time. A second request for the SAME view is a no-op (the running one will
+    // render it); the render below clears any such flag.
+    if (this._loading) return;
     this._loading = true;
-    this._dirty = false;
     this._revokeThumbs();
     this.$.grid.innerHTML = "";
     this._setStatus("Caricamento… una camera a batteria deve svegliarsi, può richiedere fino a un minuto.");
@@ -207,20 +204,16 @@ class EufyRecordingsCard extends HTMLElement {
       err = e;
     }
     this._loading = false;
-    // View moved while we waited → load the current view now, discard this stale result.
-    if (this._dirty || this._selectedCamera !== sn || ymd(this._date) !== day) {
-      this._dirty = false;
+    // The user moved to another view while we waited → show that one instead.
+    if (this._selectedCamera !== sn || ymd(this._date) !== day) {
       this._loadDay();
       return;
     }
     if (err) {
-      this._setStatus(`Errore: ${err.message || err}`);
+      this._setStatus(`Errore: ${err.message || err}. Premi ⟳ per riprovare.`);
       return;
     }
-    if (!rows.length) {
-      this._setStatus("Nessuna registrazione per questo giorno. Se sai che ci sono, la camera non ha risposto: tieni aperta la vista live e premi ⟳.");
-      return;
-    }
+    // Cache the result — including an empty day — so we don't re-query on every hass update; ⟳ refreshes.
     this._cache[key] = rows;
     this._render(sn, day, rows);
   }
@@ -229,6 +222,10 @@ class EufyRecordingsCard extends HTMLElement {
     if (this._selectedCamera !== sn || ymd(this._date) !== day) return;
     this._revokeThumbs();
     this.$.grid.innerHTML = "";
+    if (!rows.length) {
+      this._setStatus("Nessuna registrazione (o la camera non ha risposto). Tieni aperta la vista live e premi ⟳.");
+      return;
+    }
     this._setStatus("");
     for (const r of rows) this._renderClip(sn, r);
   }
