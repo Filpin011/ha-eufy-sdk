@@ -7,8 +7,11 @@ https://github.com/mega-yfue/ha-eufy-sdk
 from __future__ import annotations
 
 from datetime import timedelta
+from pathlib import Path
 from typing import TYPE_CHECKING
 
+from homeassistant.components.frontend import add_extra_js_url
+from homeassistant.components.http import StaticPathConfig
 from homeassistant.const import Platform
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from homeassistant.loader import async_get_loaded_integration
@@ -27,6 +30,13 @@ from .const import (
 from .coordinator import EufySdkDataUpdateCoordinator
 from .data import EufySdkData
 from .media_source import async_register_recording_view
+from .recordings_ws import async_register_recordings_ws
+
+# The recordings dashboard card, served from the integration and auto-loaded as a
+# frontend module so `type: custom:eufy-recordings-card` works with no manual resource.
+_CARD_URL = "/eufy_sdk_static/eufy-recordings-card.js"
+_CARD_VERSION = "5"  # bump to bust the browser cache when the card changes
+_FRONTEND_REGISTERED = f"{DOMAIN}_frontend_card"
 
 if TYPE_CHECKING:
     from homeassistant.core import HomeAssistant
@@ -134,7 +144,24 @@ async def async_setup_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> b
 
     # Serve the recordings media source's HTTP proxy (once, regardless of entries).
     async_register_recording_view(hass)
+    async_register_recordings_ws(hass)
+    await _async_register_card(hass)
     return True
+
+
+async def _async_register_card(hass: HomeAssistant) -> None:
+    """Serve the recordings dashboard card and auto-load it as a frontend module."""
+    if hass.data.get(_FRONTEND_REGISTERED):
+        return
+    card = Path(__file__).parent / "www" / "eufy-recordings-card.js"
+    try:
+        await hass.http.async_register_static_paths(
+            [StaticPathConfig(_CARD_URL, str(card), cache_headers=False)]
+        )
+        add_extra_js_url(hass, f"{_CARD_URL}?v={_CARD_VERSION}")
+        hass.data[_FRONTEND_REGISTERED] = True
+    except Exception as err:  # noqa: BLE001 - a missing card must not block setup
+        LOGGER.warning("could not register the recordings card: %s", err)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: EufySdkConfigEntry) -> bool:
