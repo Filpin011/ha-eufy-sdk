@@ -123,7 +123,7 @@ class EufyRecordingsCard extends HTMLElement {
     });
     this.$.prev.addEventListener("click", () => this._shiftDay(-1));
     this.$.next.addEventListener("click", () => this._shiftDay(1));
-    this.$.reload.addEventListener("click", () => this._loadDay());
+    this.$.reload.addEventListener("click", () => this._loadDay(true));
   }
 
   _shiftDay(delta) {
@@ -163,26 +163,60 @@ class EufyRecordingsCard extends HTMLElement {
     this._thumbUrls = [];
   }
 
-  async _loadDay() {
+  async _loadDay(force = false) {
     if (!this._selectedCamera) return;
     const sn = this._selectedCamera;
     const day = ymd(this._date);
+    const key = `${sn}|${day}`;
+    this._cache = this._cache || {};
+    if (force) delete this._cache[key];
+    // Already have it → show instantly, no bridge round-trip (a battery camera is slow to wake).
+    if (this._cache[key]) {
+      this._render(sn, day, this._cache[key]);
+      return;
+    }
+    // One list at a time: while a slow query runs, just remember that the view moved and reload once
+    // it returns — never pile up 40s queries behind each other.
+    if (this._loading) {
+      this._dirty = true;
+      return;
+    }
+    this._loading = true;
+    this._dirty = false;
     this._revokeThumbs();
     this.$.grid.innerHTML = "";
-    this._setStatus("Caricamento… (la camera potrebbe doversi svegliare)");
-    let rows;
+    this._setStatus("Caricamento… una camera a batteria deve svegliarsi, può richiedere fino a un minuto.");
+    let rows = null;
+    let err = null;
     try {
       const res = await this._hass.callWS({ type: "eufy_sdk/recordings/list", sn, date: day });
       rows = res.recordings || [];
     } catch (e) {
-      this._setStatus(`Errore: ${e.message || e}`);
+      err = e;
+    }
+    this._loading = false;
+    // View moved while we waited → load the current view now, discard this stale result.
+    if (this._dirty || this._selectedCamera !== sn || ymd(this._date) !== day) {
+      this._dirty = false;
+      this._loadDay();
       return;
     }
-    if (this._selectedCamera !== sn || ymd(this._date) !== day) return; // user moved on
+    if (err) {
+      this._setStatus(`Errore: ${err.message || err}`);
+      return;
+    }
     if (!rows.length) {
-      this._setStatus("Nessuna registrazione per questo giorno.");
+      this._setStatus("Nessuna registrazione per questo giorno. Se sai che ci sono, la camera non ha risposto: tieni aperta la vista live e premi ⟳.");
       return;
     }
+    this._cache[key] = rows;
+    this._render(sn, day, rows);
+  }
+
+  _render(sn, day, rows) {
+    if (this._selectedCamera !== sn || ymd(this._date) !== day) return;
+    this._revokeThumbs();
+    this.$.grid.innerHTML = "";
     this._setStatus("");
     for (const r of rows) this._renderClip(sn, r);
   }
