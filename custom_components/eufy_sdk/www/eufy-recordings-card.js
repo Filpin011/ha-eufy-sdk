@@ -49,6 +49,18 @@ class EufyRecordingsCard extends HTMLElement {
     return 8;
   }
 
+  // Authenticated fetch that works whether or not hass exposes fetchWithAuth: fall back to the
+  // current access token as a Bearer header (the frontend keeps it fresh in hass.auth.data).
+  async _authFetch(url) {
+    const h = this._hass;
+    if (h && typeof h.fetchWithAuth === "function") return h.fetchWithAuth(url);
+    const token =
+      h?.auth?.data?.access_token ??
+      h?.connection?.options?.auth?.data?.access_token ??
+      null;
+    return fetch(url, token ? { headers: { authorization: `Bearer ${token}` } } : { credentials: "same-origin" });
+  }
+
   // ── DOM ──────────────────────────────────────────────────────────────────
   _build() {
     this._built = true;
@@ -238,7 +250,7 @@ class EufyRecordingsCard extends HTMLElement {
   async _loadThumb(sn, thumbPath, el) {
     try {
       const url = `/api/eufy_sdk/recording?sn=${encodeURIComponent(sn)}&path=${encodeURIComponent(b64(thumbPath))}&kind=thumb`;
-      const resp = await this._hass.fetchWithAuth(url);
+      const resp = await this._authFetch(url);
       if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
       const blob = await resp.blob();
       const obj = URL.createObjectURL(blob);
@@ -279,7 +291,7 @@ class EufyRecordingsCard extends HTMLElement {
     const video = overlay.querySelector("video");
     try {
       const url = `/api/eufy_sdk/recording?sn=${encodeURIComponent(sn)}&path=${encodeURIComponent(b64(path))}`;
-      const resp = await this._hass.fetchWithAuth(url);
+      const resp = await this._authFetch(url);
       if (!resp.ok) {
         let detail = `HTTP ${resp.status}`;
         try {

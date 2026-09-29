@@ -35,7 +35,7 @@ from .recordings_ws import async_register_recordings_ws
 # The recordings dashboard card, served from the integration and auto-loaded as a
 # frontend module so `type: custom:eufy-recordings-card` works with no manual resource.
 _CARD_URL = "/eufy_sdk_static/eufy-recordings-card.js"
-_CARD_VERSION = "6"  # bump to bust the browser cache when the card changes
+_CARD_VERSION = "7"  # bump to bust the browser cache when the card changes
 _FRONTEND_REGISTERED = f"{DOMAIN}_frontend_card"
 
 if TYPE_CHECKING:
